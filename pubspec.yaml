@@ -1,5 +1,5 @@
 name: sahwa_alarm
-description: Smart Alarm and Habits App
+description: Smart Alarm and Tasks App in Flutter
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,15 +9,15 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # حفظ البيانات في ذاكرة الهاتف
-  shared_preferences: ^2.2.2
-  # اختيار الملفات والنغمات من الهاتف
-  file_picker: ^8.0.0
-
-dev_dependencies:
-  flutter_test:
+  flutter_localizations:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  shared_preferences: ^2.2.2
+  file_picker: ^8.1.6
+  intl: ^0.20.3
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+  permission_handler: ^11.3.1
+  audioplayers: ^6.1.0
 
 flutter:
   uses-material-design: true
