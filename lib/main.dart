@@ -1,17 +1,19 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:intl/intl.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const SahwaApp());
 }
 
-// نموذج المنبه
-class AlarmModel {
+// ----------------------------------------------------
+// 1. نماذج البيانات (Models)
+// ----------------------------------------------------
+
+class AlarmItem {
   int hour;
   int minute;
   String label;
@@ -21,13 +23,13 @@ class AlarmModel {
   String? ringtonePath;
   bool hasMathChallenge;
 
-  AlarmModel({
+  AlarmItem({
     required this.hour,
     required this.minute,
     required this.label,
     this.isEnabled = true,
     this.snoozeMinutes = 5,
-    this.ringtoneName = 'نغمة الصحوة الهادئة',
+    this.ringtoneName = 'نغمة نسيم الفجر',
     this.ringtonePath,
     this.hasMathChallenge = false,
   });
@@ -50,26 +52,25 @@ class AlarmModel {
         'hasMathChallenge': hasMathChallenge,
       };
 
-  factory AlarmModel.fromMap(Map<String, dynamic> map) => AlarmModel(
-        hour: map['hour'],
-        minute: map['minute'],
-        label: map['label'],
+  factory AlarmItem.fromMap(Map<String, dynamic> map) => AlarmItem(
+        hour: map['hour'] ?? 6,
+        minute: map['minute'] ?? 0,
+        label: map['label'] ?? 'منبه',
         isEnabled: map['isEnabled'] ?? true,
         snoozeMinutes: map['snoozeMinutes'] ?? 5,
-        ringtoneName: map['ringtoneName'] ?? 'نغمة الصحوة الهادئة',
+        ringtoneName: map['ringtoneName'] ?? 'نغمة نسيم الفجر',
         ringtonePath: map['ringtonePath'],
         hasMathChallenge: map['hasMathChallenge'] ?? false,
       );
 }
 
-// نموذج المهمة اليومية
-class TaskModel {
+class TaskItem {
   String title;
   String category;
   bool isCompleted;
   int streak;
 
-  TaskModel({
+  TaskItem({
     required this.title,
     required this.category,
     this.isCompleted = false,
@@ -83,13 +84,17 @@ class TaskModel {
         'streak': streak,
       };
 
-  factory TaskModel.fromMap(Map<String, dynamic> map) => TaskModel(
-        title: map['title'],
+  factory TaskItem.fromMap(Map<String, dynamic> map) => TaskItem(
+        title: map['title'] ?? '',
         category: map['category'] ?? 'عادات',
         isCompleted: map['isCompleted'] ?? false,
         streak: map['streak'] ?? 1,
       );
 }
+
+// ----------------------------------------------------
+// 2. التطبيق الرئيسي (Root App)
+// ----------------------------------------------------
 
 class SahwaApp extends StatefulWidget {
   const SahwaApp({super.key});
@@ -101,7 +106,7 @@ class SahwaApp extends StatefulWidget {
 class _SahwaAppState extends State<SahwaApp> {
   ThemeMode _themeMode = ThemeMode.dark; // الوضع الليلي المريح للعين افتراضياً
 
-  void toggleTheme(ThemeMode mode) {
+  void _setTheme(ThemeMode mode) {
     setState(() {
       _themeMode = mode;
     });
@@ -110,20 +115,12 @@ class _SahwaAppState extends State<SahwaApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'صحوة - المنبه الذكي',
+      title: 'صحوة',
       debugShowCheckedModeBanner: false,
-      // الدعم الكامل للغة العربية
-      locale: const Locale('ar', 'SA'),
-      supportedLocales: const [Locale('ar', 'SA'), Locale('en', 'US')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
       themeMode: _themeMode,
       theme: ThemeData(
+        useMaterial3: true,
         brightness: Brightness.light,
-        primaryColor: const Color(0xFFF59E0B),
         scaffoldBackgroundColor: const Color(0xFFF8FAFC),
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFFF59E0B),
@@ -131,8 +128,8 @@ class _SahwaAppState extends State<SahwaApp> {
         ),
       ),
       darkTheme: ThemeData(
+        useMaterial3: true,
         brightness: Brightness.dark,
-        primaryColor: const Color(0xFFF59E0B),
         scaffoldBackgroundColor: const Color(0xFF0F172A), // كحلي مريح للعين
         cardColor: const Color(0xFF1E293B),
         colorScheme: ColorScheme.fromSeed(
@@ -140,91 +137,110 @@ class _SahwaAppState extends State<SahwaApp> {
           brightness: Brightness.dark,
         ),
       ),
-      home: HomeScreen(onThemeChanged: toggleTheme, currentTheme: _themeMode),
+      // دعم اتجاه اليمين لليسار (RTL) للغة العربية مباشرة
+      builder: (context, child) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: child ?? const SizedBox(),
+        );
+      },
+      home: SahwaHomeScreen(
+        currentTheme: _themeMode,
+        onThemeChanged: _setTheme,
+      ),
     );
   }
 }
 
-class HomeScreen extends StatefulWidget {
-  final Function(ThemeMode) onThemeChanged;
-  final ThemeMode currentTheme;
+// ----------------------------------------------------
+// 3. الشاشة الرئيسية والتبويبات
+// ----------------------------------------------------
 
-  const HomeScreen({
+class SahwaHomeScreen extends StatefulWidget {
+  final ThemeMode currentTheme;
+  final Function(ThemeMode) onThemeChanged;
+
+  const SahwaHomeScreen({
     super.key,
-    required this.onThemeChanged,
     required this.currentTheme,
+    required this.onThemeChanged,
   });
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<SahwaHomeScreen> createState() => _SahwaHomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _SahwaHomeScreenState extends State<SahwaHomeScreen> {
   int _currentIndex = 0;
-  List<AlarmModel> _alarms = [];
-  List<TaskModel> _tasks = [];
+  List<AlarmItem> _alarms = [];
+  List<TaskItem> _tasks = [];
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadStoredData();
   }
 
-  // تحميل البيانات المحفوظة محلياً
-  Future<void> _loadData() async {
+  // تحميل البيانات المحفوظة
+  Future<void> _loadStoredData() async {
     final prefs = await SharedPreferences.getInstance();
-    final alarmsJson = prefs.getString('saved_alarms');
-    final tasksJson = prefs.getString('saved_tasks');
+    final aJson = prefs.getString('alarms_data');
+    final tJson = prefs.getString('tasks_data');
 
     setState(() {
-      if (alarmsJson != null) {
-        final List decoded = jsonDecode(alarmsJson);
-        _alarms = decoded.map((e) => AlarmModel.fromMap(e)).toList();
+      if (aJson != null && aJson.isNotEmpty) {
+        try {
+          final List list = jsonDecode(aJson);
+          _alarms = list.map((e) => AlarmItem.fromMap(e)).toList();
+        } catch (_) {}
       } else {
-        // منبهات افتراضية
+        // منبهات أولية جاهزة
         _alarms = [
-          AlarmModel(hour: 5, minute: 15, label: 'صلاة الفجر وبداية البركة'),
-          AlarmModel(hour: 7, minute: 30, label: 'الاستعداد للعمل والدراسة', hasMathChallenge: true),
+          AlarmItem(hour: 5, minute: 15, label: 'صلاة الفجر وبداية البركة', isEnabled: true),
+          AlarmItem(hour: 7, minute: 30, label: 'الاستعداد للعمل والدراسة', isEnabled: true, hasMathChallenge: true),
         ];
       }
 
-      if (tasksJson != null) {
-        final List decoded = jsonDecode(tasksJson);
-        _tasks = decoded.map((e) => TaskModel.fromMap(e)).toList();
+      if (tJson != null && tJson.isNotEmpty) {
+        try {
+          final List list = jsonDecode(tJson);
+          _tasks = list.map((e) => TaskItem.fromMap(e)).toList();
+        } catch (_) {}
       } else {
-        // مهام افتراضية
+        // مهام وعادات أولية جاهزة
         _tasks = [
-          TaskModel(title: 'أذكار الصباح والورد القرآني', category: 'عبادات', isCompleted: true, streak: 5),
-          TaskModel(title: 'مشي 20 دقيقة وشرب لتر ماء', category: 'صحة', streak: 3),
-          TaskModel(title: 'مراجعة أولويات اليوم', category: 'عمل', streak: 7),
+          TaskItem(title: 'أذكار الصباح والورد القرآني', category: 'عبادات', isCompleted: true, streak: 5),
+          TaskItem(title: 'تمارين خفيفة وشرب لتر ماء', category: 'صحة', isCompleted: false, streak: 3),
+          TaskItem(title: 'تحديد أهم 3 أولويات لإنجاز اليوم', category: 'عمل', isCompleted: false, streak: 7),
         ];
       }
     });
   }
 
-  // حفظ البيانات
   Future<void> _saveData() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('saved_alarms', jsonEncode(_alarms.map((e) => e.toMap()).toList()));
-    await prefs.setString('saved_tasks', jsonEncode(_tasks.map((e) => e.toMap()).toList()));
+    await prefs.setString('alarms_data', jsonEncode(_alarms.map((e) => e.toMap()).toList()));
+    await prefs.setString('tasks_data', jsonEncode(_tasks.map((e) => e.toMap()).toList()));
   }
 
-  // إضافة أو تعديل منبه
-  void _openAlarmBottomSheet([AlarmModel? existing, int? index]) {
+  // نافذة إضافة/تعديل منبه
+  void _showAlarmSheet([AlarmItem? existing, int? editIndex]) {
     TimeOfDay selectedTime = existing != null
         ? TimeOfDay(hour: existing.hour, minute: existing.minute)
         : const TimeOfDay(hour: 6, minute: 0);
     String label = existing?.label ?? '';
     int snooze = existing?.snoozeMinutes ?? 5;
     bool hasMath = existing?.hasMathChallenge ?? false;
-    String ringtoneName = existing?.ringtoneName ?? 'نغمة الصحوة الهادئة';
+    String ringtoneName = existing?.ringtoneName ?? 'نغمة نسيم الفجر';
     String? ringtonePath = existing?.ringtonePath;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Theme.of(context).cardColor,
-      shape: const RoundedCornerShape(topRight: Radius.circular(24), topLeft: Radius.circular(24)),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -241,21 +257,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      existing == null ? 'إضافة منبه جديد ⏰' : 'تعديل المنبه ⏰',
+                      existing == null ? 'إضافة منبه ذكي جديد ⏰' : 'تعديل المنبه ⏰',
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
                     // اختيار الوقت
                     ListTile(
-                      shape: RoundedCornerShape(12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       tileColor: Colors.black26,
-                      leading: const Icon(Icons.access_time, color: Color(0xFFF59E0B)),
+                      leading: const Icon(Icons.access_time_filled, color: Color(0xFFF59E0B)),
                       title: Text(
-                        'وقت التنبيه: ${selectedTime.format(context)}',
+                        'وقت التنبيه: ${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
-                      trailing: const Text('تغيير', style: TextStyle(color: Color(0xFFF59E0B))),
+                      trailing: const Text('تغيير الوقت', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold)),
                       onTap: () async {
                         final picked = await showTimePicker(
                           context: context,
@@ -276,7 +292,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         hintText: 'مثال: صلاة الفجر، العمل، الرياضة',
                         filled: true,
                         fillColor: Colors.black26,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -284,29 +300,56 @@ class _HomeScreenState extends State<HomeScreen> {
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF334155),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
-                      icon: const Icon(Icons.audiotrack, color: Color(0xFFF59E0B)),
+                      icon: const Icon(Icons.music_note, color: Color(0xFFF59E0B)),
                       label: Text(
-                        'نغمة التنبيه: $ringtoneName 🎵',
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        'النغمة: $ringtoneName 🎵',
                         overflow: TextOverflow.ellipsis,
                       ),
                       onPressed: () async {
-                        FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.audio);
-                        if (result != null && result.files.single.path != null) {
-                          setSheetState(() {
-                            ringtonePath = result.files.single.path;
-                            ringtoneName = result.files.single.name;
-                          });
+                        try {
+                          final result = await FilePicker.platform.pickFiles(type: FileType.audio);
+                          if (result != null && result.files.single.path != null) {
+                            setSheetState(() {
+                              ringtonePath = result.files.single.path;
+                              ringtoneName = result.files.single.name;
+                            });
+                          }
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('تم اختيار النغمة المدمجة')),
+                          );
                         }
                       },
                     ),
                     const SizedBox(height: 12),
-                    // خيارات الغفوة وتحدي الاستيقاظ
+                    // مدة الغفوة
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('مدة الغفوة:', style: TextStyle(fontWeight: FontWeight.bold)),
+                        DropdownButton<int>(
+                          value: snooze,
+                          underline: const SizedBox(),
+                          items: const [
+                            DropdownMenuItem(value: 5, child: Text('5 دقائق')),
+                            DropdownMenuItem(value: 10, child: Text('10 دقائق')),
+                            DropdownMenuItem(value: 15, child: Text('15 دقيقة')),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) setSheetState(() => snooze = v);
+                          },
+                        ),
+                      ],
+                    ),
+                    // تحدي الاستيقاظ
                     SwitchListTile(
-                      title: const Text('تحدي الاستيقاظ (حل مسألة حسابية)'),
-                      subtitle: const Text('يضمن استيقاظك التام قبل إيقاف الرنين'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('تحدي الاستيقاظ (حل مسألة حسابية)', style: TextStyle(fontSize: 14)),
+                      subtitle: const Text('حل مسألة لإيقاف المنبه للتأكد من اليقظة', style: TextStyle(fontSize: 12)),
                       value: hasMath,
                       activeColor: const Color(0xFFF59E0B),
                       onChanged: (val) => setSheetState(() => hasMath = val),
@@ -317,29 +360,29 @@ class _HomeScreenState extends State<HomeScreen> {
                         backgroundColor: const Color(0xFFF59E0B),
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedCornerShape(12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
-                      child: const Text('حفظ المنبه وتفعيله', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       onPressed: () {
                         setState(() {
-                          final alarm = AlarmModel(
+                          final newItem = AlarmItem(
                             hour: selectedTime.hour,
                             minute: selectedTime.minute,
                             label: label.isEmpty ? 'منبه' : label,
                             snoozeMinutes: snooze,
-                            hasMathChallenge: hasMath,
                             ringtoneName: ringtoneName,
                             ringtonePath: ringtonePath,
+                            hasMathChallenge: hasMath,
                           );
-                          if (index != null) {
-                            _alarms[index] = alarm;
+                          if (editIndex != null) {
+                            _alarms[editIndex] = newItem;
                           } else {
-                            _alarms.add(alarm);
+                            _alarms.add(newItem);
                           }
                           _saveData();
                         });
-                        Navigator.pop(context);
+                        Navigator.pop(ctx);
                       },
+                      child: const Text('حفظ المنبه وتفعيله', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
                   ],
                 ),
@@ -351,29 +394,100 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // محاكاة شاشة رنين المنبه مع التحدي الرياضي
+  void _testAlarmRing(AlarmItem alarm) {
+    int num1 = Random().nextInt(30) + 10;
+    int num2 = Random().nextInt(20) + 5;
+    int solution = num1 + num2;
+    String answer = '';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Center(
+          child: Column(
+            children: [
+              const Icon(Icons.alarm, color: Color(0xFFF59E0B), size: 48),
+              const SizedBox(height: 8),
+              Text(alarm.label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+              Text(alarm.formattedTime, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFFF59E0B))),
+            ],
+          ),
+        ),
+        content: alarm.hasMathChallenge
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('حل المسألة التالية لإيقاف الرنين:', style: TextStyle(color: Colors.white70)),
+                  const SizedBox(height: 8),
+                  Text('$num1 + $num2 = ؟', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.amber)),
+                  const SizedBox(height: 10),
+                  TextField(
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      hintText: 'اكتب الناتج هنا',
+                      filled: true,
+                      fillColor: Colors.white12,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onChanged: (val) => answer = val.trim(),
+                  ),
+                ],
+              )
+            : const Text('حان وقت الاستيقاظ! صباح الهمة والإنجاز ☀️', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text('غفوة (${alarm.snoozeMinutes} د)'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF59E0B), foregroundColor: Colors.black),
+            onPressed: () {
+              if (alarm.hasMathChallenge && answer != solution.toString()) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('إجابة خاطئة! ركز وحاول مجدداً')),
+                );
+                return;
+              }
+              Navigator.pop(dialogCtx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('تم إيقاف المنبه بنجاح! يومك مبارك')),
+              );
+            },
+            child: const Text('إيقاف المنبه'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final screens = [
-      _buildAlarmsTab(),
-      _buildTasksTab(),
-      _buildStatsTab(),
-      _buildSettingsTab(),
+    final List<Widget> pages = [
+      _buildAlarmsPage(),
+      _buildTasksPage(),
+      _buildStatsPage(),
+      _buildSettingsPage(),
     ];
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('صحوة • المنبه والمهام الذكية', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('صحوة • المنبه والمهام', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: screens[_currentIndex],
+      body: pages[_currentIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+        onDestinationSelected: (i) => setState(() => _currentIndex = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.alarm), label: 'المنبهات'),
-          NavigationDestination(icon: Icon(Icons.checklist), label: 'المهام'),
+          NavigationDestination(icon: Icon(Icons.task_alt), label: 'المهام'),
           NavigationDestination(icon: Icon(Icons.bar_chart), label: 'الإحصائيات'),
           NavigationDestination(icon: Icon(Icons.settings), label: 'الإعدادات'),
         ],
@@ -381,12 +495,13 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: _currentIndex < 2
           ? FloatingActionButton(
               backgroundColor: const Color(0xFFF59E0B),
-              child: const Icon(Icons.add, color: Colors.black),
+              foregroundColor: Colors.black,
+              child: const Icon(Icons.add),
               onPressed: () {
                 if (_currentIndex == 0) {
-                  _openAlarmBottomSheet();
+                  _showAlarmSheet();
                 } else {
-                  _openAddTaskDialog();
+                  _showAddTaskDialog();
                 }
               },
             )
@@ -395,13 +510,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // تبويب المنبهات
-  Widget _buildAlarmsTab() {
+  Widget _buildAlarmsPage() {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         // بطاقة المنبه القادم
         Card(
-          shape: RoundedCornerShape(20),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           color: const Color(0xFF1E293B),
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -411,150 +526,5 @@ class _HomeScreenState extends State<HomeScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('المنبه القادم', style: TextStyle(color: Color(0xFFF59E0B), fontSize: 13)),
-                    const SizedBox(height: 4),
-                    Text(
-                      _alarms.isNotEmpty ? _alarms.first.formattedTime : '--:--',
-                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      _alarms.isNotEmpty ? _alarms.first.label : 'لا توجد منبهات مضافة',
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
-                    ),
-                  ],
-                ),
-                const CircleAvatar(
-                  radius: 28,
-                  backgroundColor: Color(0x33F59E0B),
-                  child: Icon(Icons.notifications_active, color: Color(0xFFF59E0B), size: 28),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        const Text('المنبهات النشطة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        ..._alarms.asMap().entries.map((entry) {
-          final idx = entry.key;
-          final alarm = entry.value;
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            shape: RoundedCornerShape(16),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              onTap: () => _openAlarmBottomSheet(alarm, idx),
-              title: Text(alarm.formattedTime, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              subtitle: Text('${alarm.label} • ${alarm.ringtoneName}'),
-              trailing: Switch(
-                value: alarm.isEnabled,
-                activeColor: const Color(0xFFF59E0B),
-                onChanged: (val) {
-                  setState(() {
-                    alarm.isEnabled = val;
-                    _saveData();
-                  });
-                },
-              ),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  // تبويب المهام
-  Widget _buildTasksTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        ..._tasks.map((task) {
-          return Card(
-            margin: const EdgeInsets.only(bottom: 10),
-            shape: RoundedCornerShape(14),
-            child: CheckboxListTile(
-              activeColor: const Color(0xFFF59E0B),
-              value: task.isCompleted,
-              title: Text(
-                task.title,
-                style: TextStyle(
-                  decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              subtitle: Text('${task.category}  •  سلسلة: ${task.streak} أيام 🔥'),
-              onChanged: (val) {
-                setState(() {
-                  task.isCompleted = val ?? false;
-                  if (task.isCompleted) task.streak += 1;
-                  _saveData();
-                });
-              },
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  void _openAddTaskDialog() {
-    String taskTitle = '';
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إضافة مهمة يومية جديدة'),
-        content: TextField(
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'اكتب اسم المهمة أو العادة...'),
-          onChanged: (val) => taskTitle = val,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () {
-              if (taskTitle.isNotEmpty) {
-                setState(() {
-                  _tasks.add(TaskModel(title: taskTitle, category: 'عادات'));
-                  _saveData();
-                });
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // تبويب الإحصائيات
-  Widget _buildStatsTab() {
-    int completed = _tasks.where((t) => t.isCompleted).length;
-    int score = _tasks.isNotEmpty ? ((completed / _tasks.length) * 100).toInt() : 85;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Stack(
-              alignment: Alignment.Center,
-              children: [
-                SizedBox(
-                  width: 130,
-                  height: 130,
-                  child: CircularProgressIndicator(
-                    value: score / 100,
-                    strokeWidth: 10,
-                    color: const Color(0xFFF59E0B),
-                    backgroundColor: Colors.white10,
-                  ),
-                ),
-                Text('$score%', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const SizedBox(height: 20),
-            const Text('معدل الانضباط والإنتاجية الأسبوعي', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text('أنجزت $completed من أصل ${_tasks.length} مه
+                    const Text('المنبه القادم', style: TextStyle(color: Color(0xFFF59E0B), fontSize: 13, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4
